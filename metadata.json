@@ -1,0 +1,6 @@
+{
+  "name": "Astra Cinema",
+  "description": "Uma plataforma de streaming cinematográfica premium inspirada nas maiores plataformas mundiais, com interface moderna de 2026.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

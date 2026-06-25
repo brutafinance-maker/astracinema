@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloudfire store {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper: Checks if the user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper: Checks if the ID has a valid structure to prevent Resource Poisoning
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Helper: Validates User Entity schema structure
+    function isValidUser(data) {
+      return data.uid == request.auth.uid
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 150
+        && (!data.keys().hasAll(['photoURL']) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && data.keys().hasAll(['uid', 'name', 'email', 'createdAt'])
+        && (data.keys().size() == 4 || (data.keys().size() == 5 && data.keys().hasAll(['photoURL'])));
+    }
+
+    // 2. Users Collection Rules
+    match /users/{userId} {
+      // Allow read only if the authenticated user is the owner of this profile document
+      allow get: if isSignedIn() 
+        && isValidId(userId) 
+        && userId == request.auth.uid;
+      
+      // Allow write (create) under strict schema and server timestamp constraints
+      allow create: if isSignedIn() 
+        && isValidId(userId) 
+        && userId == request.auth.uid
+        && isValidUser(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+
+      // Allow write (update) only for specific mutable profile fields (name, photoURL)
+      allow update: if isSignedIn() 
+        && isValidId(userId) 
+        && userId == request.auth.uid
+        && isValidUser(request.resource.data)
+        // Ensure immutable fields are unchanged
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        // Limit updates to permissible profile fields
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'photoURL']);
+
+      // Delete operations are blocked by default
+      allow delete: if false;
+    }
+  }
+}
