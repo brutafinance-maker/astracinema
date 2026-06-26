@@ -24,6 +24,8 @@ export interface ContentItem {
   seasons?: any[];
   youtubeId?: string;
   gdriveId?: string;
+  selectedSeason?: number;
+  selectedEpisode?: number;
   hasRealTrailer?: boolean;
   playbackState?: {
     progress: number;      // percentage (0-100)

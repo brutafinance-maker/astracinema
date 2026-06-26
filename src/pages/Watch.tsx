@@ -3,6 +3,7 @@ import { ArrowLeft, Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize
 import { useRoute } from '../contexts/RouteContext';
 import { useHistory } from '../contexts/HistoryContext';
 import { ContentItem } from '../types';
+import { FROM_EPISODES } from '../data/fromEpisodes';
 
 // Standard high-quality open source streaming MP4 for premium demonstration
 const DEMO_VIDEO_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4";
@@ -40,13 +41,25 @@ export default function WatchPage() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [isSpeedDropdownOpen, setIsSpeedDropdownOpen] = useState(false);
 
-  // Google Drive Stream Modes
-  const [gdriveMode, setGdriveMode] = useState<'checking' | 'direct' | 'embed'>(movie.gdriveId ? 'checking' : 'direct');
-
   // Series Specific States (Structure)
-  const [activeSeason, setActiveSeason] = useState(1);
-  const [activeEpisode, setActiveEpisode] = useState(1);
+  const [activeSeason, setActiveSeason] = useState(movie.selectedSeason || 1);
+  const [activeEpisode, setActiveEpisode] = useState(movie.selectedEpisode || 1);
   const [episodesList, setEpisodesList] = useState<any[]>([]);
+
+  // Find current episode object if it's a TV series and has custom metadata
+  const currentEpisodeObj = React.useMemo(() => {
+    if (movie.category !== 'series') return null;
+    const isFromSeries = movie.title.toLowerCase().includes('from') || movie.title.toLowerCase().includes('origem') || movie.id.includes('124116');
+    if (isFromSeries) {
+      return FROM_EPISODES.find((ep) => ep.season === activeSeason && ep.episode === activeEpisode) || null;
+    }
+    return null;
+  }, [movie, activeSeason, activeEpisode]);
+
+  const currentEmbedUrl = currentEpisodeObj?.videoUrl || '';
+
+  // Google Drive Stream Modes
+  const [gdriveMode, setGdriveMode] = useState<'checking' | 'direct' | 'embed'>(movie.gdriveId ? 'checking' : (currentEmbedUrl ? 'embed' : 'direct'));
 
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -55,8 +68,19 @@ export default function WatchPage() {
 
   // Dynamic Video Url lookup
   const directStreamUrl = movie.gdriveId ? `https://drive.google.com/uc?id=${movie.gdriveId}&export=download` : '';
-  const embedPreviewUrl = movie.gdriveId ? `https://drive.google.com/file/d/${movie.gdriveId}/preview` : '';
-  const videoUrl = useDemo ? DEMO_VIDEO_URL : (movie.gdriveId ? directStreamUrl : (movie.videoUrl || ''));
+  const embedPreviewUrl = movie.gdriveId ? `https://drive.google.com/file/d/${movie.gdriveId}/preview` : (currentEmbedUrl || '');
+  const videoUrl = useDemo ? DEMO_VIDEO_URL : (movie.gdriveId ? directStreamUrl : (currentEmbedUrl ? '' : (movie.videoUrl || '')));
+
+  // For custom embed, handle loading state transitions
+  useEffect(() => {
+    if (currentEmbedUrl) {
+      setIsLoading(true);
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [currentEmbedUrl]);
 
   const speedOptions = [0.5, 1.0, 1.25, 1.5, 2.0];
 
@@ -87,19 +111,57 @@ export default function WatchPage() {
   // Setup seasons / episodes list
   useEffect(() => {
     if (movie.category === 'series') {
-      const firstSeason = movie.seasons?.find((s: any) => s.season_number === activeSeason) || movie.seasons?.[0];
-      const count = firstSeason?.episode_count || movie.episodesCount || 10;
-      
-      const eps = Array.from({ length: count }, (_, idx) => ({
-        id: `ep-${idx + 1}`,
-        number: idx + 1,
-        title: `Episódio ${idx + 1}`,
-        description: `Descrição em alta definição do episódio ${idx + 1} da série ${movie.title}.`,
-        duration: '45 min'
-      }));
-      setEpisodesList(eps);
+      const isFromSeries = movie.title.toLowerCase().includes('from') || movie.title.toLowerCase().includes('origem') || movie.id.includes('124116');
+      if (isFromSeries) {
+        const eps = FROM_EPISODES.filter((ep) => ep.season === activeSeason).map((ep) => ({
+          id: `ep-${ep.episode}`,
+          number: ep.episode,
+          title: ep.title,
+          description: ep.description,
+          duration: '45 min',
+          rating: ep.rating,
+          airDate: ep.airDate,
+          thumbnailUrl: ep.thumbnailUrl
+        }));
+        setEpisodesList(eps);
+      } else {
+        const firstSeason = movie.seasons?.find((s: any) => s.season_number === activeSeason) || movie.seasons?.[0];
+        const count = firstSeason?.episode_count || movie.episodesCount || 10;
+        
+        const eps = Array.from({ length: count }, (_, idx) => ({
+          id: `ep-${idx + 1}`,
+          number: idx + 1,
+          title: `Episódio ${idx + 1}`,
+          description: `Descrição em alta definição do episódio ${idx + 1} da série ${movie.title}.`,
+          duration: '45 min'
+        }));
+        setEpisodesList(eps);
+      }
     }
   }, [movie, activeSeason]);
+
+  // Force automatic fullscreen/widescreen mode on mount
+  useEffect(() => {
+    const enterFullscreenOnMount = async () => {
+      // Let the player render and settle
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      if (!playerContainerRef.current) return;
+      
+      try {
+        if (!document.fullscreenElement) {
+          await playerContainerRef.current.requestFullscreen();
+          setIsFullscreen(true);
+        }
+      } catch (err) {
+        console.warn(
+          'Automatic fullscreen request on load was blocked by browser security policy. This is normal and expected inside developer console previews or without preceding clicks. Fullscreen can be requested via the button.',
+          err
+        );
+      }
+    };
+    
+    enterFullscreenOnMount();
+  }, [movie.id]);
 
   // Keyboard shortcut events
   useEffect(() => {
@@ -387,8 +449,8 @@ export default function WatchPage() {
   // Progress percentage
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-  // Render Fallback if no video URL or gdrive ID is provided
-  if (!videoUrl && !movie.gdriveId) {
+  // Render Fallback if no video URL, gdrive ID, and no custom embed URL is provided
+  if (!videoUrl && !movie.gdriveId && !currentEmbedUrl) {
     return (
       <div className="fixed inset-0 bg-[#09090B] flex flex-col justify-between p-6 md:p-12 text-white z-50 overflow-y-auto selection:bg-[#7C3AED]/30">
         
@@ -465,7 +527,7 @@ export default function WatchPage() {
       )}
 
       {/* Mode 1: Custom HTML5 Video Player */}
-      {gdriveMode === 'direct' && (
+      {gdriveMode === 'direct' && !currentEmbedUrl && (
         <>
           <video
             ref={videoRef}
@@ -499,6 +561,18 @@ export default function WatchPage() {
             allow="autoplay; fullscreen; encrypted-media"
             sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
             id="gdrive-embed-iframe"
+          />
+        </div>
+      )}
+
+      {/* Mode 3: Custom Episode Embed Frame (e.g. Dailymotion for FROM episodes) */}
+      {currentEmbedUrl && (
+        <div className="absolute inset-0 w-full h-full z-10 bg-black overflow-hidden">
+          <iframe
+            src={currentEmbedUrl}
+            className="absolute inset-0 w-full h-full border-none"
+            allow="autoplay; fullscreen; picture-in-picture"
+            id="custom-embed-iframe"
           />
         </div>
       )}
@@ -546,6 +620,15 @@ export default function WatchPage() {
       >
         {/* Left Side: Info */}
         <div className="flex items-start gap-4 pointer-events-auto">
+          {/* Back Button */}
+          <button
+            onClick={handleBack}
+            className="flex items-center justify-center w-11 h-11 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-800 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg"
+            title="Voltar aos Detalhes"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-[9px] bg-[#7C3AED] text-white font-black px-2 py-0.5 rounded uppercase tracking-wider">
@@ -582,8 +665,8 @@ export default function WatchPage() {
         </div>
       </div>
 
-      {/* Bottom Controls Panel overlay (Custom Controls rendered in direct Mode) */}
-      {gdriveMode === 'direct' && (
+      {/* Bottom Controls Panel overlay (Custom Controls rendered in direct Mode and not custom embed) */}
+      {gdriveMode === 'direct' && !currentEmbedUrl && (
         <div 
           className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-6 md:p-8 flex flex-col gap-4 z-30 transition-all duration-500 ${
             showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
@@ -732,6 +815,63 @@ export default function WatchPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Controls Panel overlay for Embed/Iframe Series */}
+      {movie.category === 'series' && currentEmbedUrl && (
+        <div 
+          className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-6 md:p-8 flex flex-col sm:flex-row items-center justify-between gap-4 z-30 transition-all duration-500 ${
+            showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+          }`}
+          id="player-series-embed-controls"
+        >
+          {/* Left: Episode info */}
+          <div className="flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse" />
+            <span className="text-xs font-black uppercase text-zinc-300 tracking-wider">
+              Reproduzindo via Astra Premium Embed
+            </span>
+          </div>
+
+          {/* Center: Episode Navigator */}
+          <div className="flex items-center gap-4 pointer-events-auto">
+            <button
+              onClick={handlePrevEpisode}
+              disabled={activeEpisode <= 1}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border cursor-pointer ${
+                activeEpisode <= 1 
+                  ? 'border-zinc-800 text-zinc-600 bg-zinc-950/20 pointer-events-none' 
+                  : 'border-zinc-800 text-zinc-300 bg-zinc-900/60 hover:bg-zinc-800 hover:text-white hover:scale-103'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Anterior</span>
+            </button>
+
+            <span className="text-xs font-mono font-black text-white px-4 py-2 bg-zinc-950/60 border border-zinc-850 rounded-xl">
+              EPISÓDIO {activeEpisode} / {episodesList.length}
+            </span>
+
+            <button
+              onClick={handleNextEpisode}
+              disabled={activeEpisode >= episodesList.length}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border cursor-pointer ${
+                activeEpisode >= episodesList.length
+                  ? 'border-zinc-800 text-zinc-600 bg-zinc-950/20 pointer-events-none' 
+                  : 'border-[#7C3AED]/40 text-purple-300 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 hover:text-white hover:scale-103'
+              }`}
+            >
+              <span>Próximo</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Right: Sound Tip */}
+          <div className="hidden lg:flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase tracking-widest font-black font-mono">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>Use os controles internos do player para áudio/legenda</span>
           </div>
         </div>
       )}

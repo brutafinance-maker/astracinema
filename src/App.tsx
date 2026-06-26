@@ -14,6 +14,7 @@ import DetailsPage from './pages/Details';
 import LoginPage from './pages/Login';
 import RegisterPage from './pages/Register';
 import WatchPage from './pages/Watch';
+
 import PrivateRoute from './components/PrivateRoute';
 import PublicRoute from './components/PublicRoute';
 
@@ -61,6 +62,7 @@ function AppContent() {
         return <SearchPage />;
       case 'details':
         return <DetailsPage />;
+
       default:
         return <HomePage />;
     }

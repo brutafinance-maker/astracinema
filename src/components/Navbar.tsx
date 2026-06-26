@@ -99,6 +99,8 @@ export default function Navbar() {
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#7C3AED] rounded-full" />
             )}
           </button>
+
+
         </div>
       </div>
 
@@ -258,6 +260,7 @@ export default function Navbar() {
               <span className="bg-[#7C3AED]/20 text-[#A855F7] px-2 py-0.5 rounded text-xs font-black">{myListCount}</span>
             )}
           </button>
+
         </div>
       )}
     </nav>
