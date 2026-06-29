@@ -56,10 +56,11 @@ export default function WatchPage() {
     return null;
   }, [movie, activeSeason, activeEpisode]);
 
-  const currentEmbedUrl = currentEpisodeObj?.videoUrl || '';
+  const activeGdriveId = movie.gdriveId || (currentEpisodeObj?.provider === 'gdrive' ? currentEpisodeObj.fileId : undefined);
+  const currentEmbedUrl = (currentEpisodeObj?.provider !== 'gdrive' && currentEpisodeObj?.videoUrl) ? currentEpisodeObj.videoUrl : '';
 
   // Google Drive Stream Modes
-  const [gdriveMode, setGdriveMode] = useState<'checking' | 'direct' | 'embed'>(movie.gdriveId ? 'checking' : (currentEmbedUrl ? 'embed' : 'direct'));
+  const [gdriveMode, setGdriveMode] = useState<'checking' | 'direct' | 'embed'>(activeGdriveId ? 'checking' : (currentEmbedUrl ? 'embed' : 'direct'));
 
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -67,9 +68,9 @@ export default function WatchPage() {
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dynamic Video Url lookup
-  const directStreamUrl = movie.gdriveId ? `https://drive.google.com/uc?id=${movie.gdriveId}&export=download` : '';
-  const embedPreviewUrl = movie.gdriveId ? `https://drive.google.com/file/d/${movie.gdriveId}/preview` : (currentEmbedUrl || '');
-  const videoUrl = useDemo ? DEMO_VIDEO_URL : (movie.gdriveId ? directStreamUrl : (currentEmbedUrl ? '' : (movie.videoUrl || '')));
+  const directStreamUrl = activeGdriveId ? `https://drive.google.com/uc?id=${activeGdriveId}&export=download` : '';
+  const embedPreviewUrl = activeGdriveId ? `https://drive.google.com/file/d/${activeGdriveId}/preview` : (currentEmbedUrl || '');
+  const videoUrl = useDemo ? DEMO_VIDEO_URL : (activeGdriveId ? directStreamUrl : (currentEmbedUrl ? '' : (movie.videoUrl || '')));
 
   // For custom embed, handle loading state transitions
   useEffect(() => {
@@ -86,13 +87,14 @@ export default function WatchPage() {
 
   // Try direct streaming, if it fails within 2.5 seconds, fallback to embed
   useEffect(() => {
-    if (!movie.gdriveId) {
-      setGdriveMode('direct');
+    if (!activeGdriveId) {
+      setGdriveMode(currentEmbedUrl ? 'embed' : 'direct');
       return;
     }
 
     setGdriveMode('checking');
     setIsLoading(true);
+    setPlaybackError(false);
 
     const fallbackTimeout = setTimeout(() => {
       setGdriveMode((current) => {
@@ -106,7 +108,7 @@ export default function WatchPage() {
     }, 2500);
 
     return () => clearTimeout(fallbackTimeout);
-  }, [movie.gdriveId]);
+  }, [activeGdriveId, currentEmbedUrl]);
 
   // Setup seasons / episodes list
   useEffect(() => {
@@ -121,7 +123,7 @@ export default function WatchPage() {
           duration: '45 min',
           rating: ep.rating,
           airDate: ep.airDate,
-          thumbnailUrl: ep.thumbnailUrl
+          thumbnailUrl: movie.bannerUrl || ep.thumbnailUrl
         }));
         setEpisodesList(eps);
       } else {
@@ -133,7 +135,8 @@ export default function WatchPage() {
           number: idx + 1,
           title: `Episódio ${idx + 1}`,
           description: `Descrição em alta definição do episódio ${idx + 1} da série ${movie.title}.`,
-          duration: '45 min'
+          duration: '45 min',
+          thumbnailUrl: movie.bannerUrl
         }));
         setEpisodesList(eps);
       }
@@ -163,72 +166,7 @@ export default function WatchPage() {
     enterFullscreenOnMount();
   }, [movie.id]);
 
-  // Keyboard shortcut events
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (gdriveMode === 'embed') return;
-      if (!videoRef.current || !videoUrl) return;
 
-      switch (e.code) {
-        case 'Space':
-          e.preventDefault();
-          togglePlay();
-          break;
-        case 'ArrowRight':
-          e.preventDefault();
-          seekForward();
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          seekBackward();
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setVolume((prev) => Math.min(1, prev + 0.1));
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          setVolume((prev) => Math.max(0, prev - 0.1));
-          break;
-        case 'KeyF':
-          e.preventDefault();
-          toggleFullscreen();
-          break;
-        case 'KeyM':
-          e.preventDefault();
-          toggleMute();
-          break;
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [videoUrl, isPlaying, isMuted, volume, gdriveMode]);
-
-  // Mouse movement detector to hide/show controls like Netflix
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    
-    // Hide controls after 3 seconds of inactivity
-    controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) {
-        setShowControls(false);
-      }
-    }, 3000);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
-      }
-    };
-  }, [isPlaying]);
 
   // Core Player Controls
   const togglePlay = () => {
@@ -335,7 +273,7 @@ export default function WatchPage() {
 
   // Video Events
   const handleCanPlay = () => {
-    if (movie.gdriveId && gdriveMode === 'checking') {
+    if (activeGdriveId && gdriveMode === 'checking') {
       setGdriveMode('direct');
       setIsLoading(false);
       console.log('Direct HTML5 streaming available for Google Drive video.');
@@ -343,7 +281,7 @@ export default function WatchPage() {
   };
 
   const handleVideoError = () => {
-    if (movie.gdriveId && (gdriveMode === 'checking' || gdriveMode === 'direct')) {
+    if (activeGdriveId && (gdriveMode === 'checking' || gdriveMode === 'direct')) {
       console.log('Direct stream error, switching to secure Google Drive Embed mode.');
       setGdriveMode('embed');
       setIsLoading(false);
@@ -446,11 +384,102 @@ export default function WatchPage() {
     }, 1000);
   };
 
+  // Stable Activity Detector to hide/show controls like Netflix
+  const handleActivity = React.useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    
+    // Hide controls after 4 seconds of inactivity
+    controlsTimeoutRef.current = setTimeout(() => {
+      const isActuallyPlaying = currentEmbedUrl || gdriveMode === 'embed' || isPlaying;
+      if (isActuallyPlaying) {
+        setShowControls(false);
+      }
+    }, 4000);
+  }, [isPlaying, gdriveMode, currentEmbedUrl]);
+
+  // Keyboard shortcut events and TV Remote Support
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Trigger activity overlay on any key press
+      handleActivity();
+
+      // Backspace or Escape to go back
+      if (e.key === 'Backspace' || e.key === 'Escape') {
+        e.preventDefault();
+        handleBack();
+        return;
+      }
+
+      if (gdriveMode === 'embed' || currentEmbedUrl) {
+        // Keyboard/TV Navigation for Embed Player Mode (e.g. Next/Prev Episode)
+        if (movie.category === 'series') {
+          if (e.key === 'PageDown' || e.code === 'KeyN') {
+            e.preventDefault();
+            handleNextEpisode();
+          } else if (e.key === 'PageUp' || e.code === 'KeyP') {
+            e.preventDefault();
+            handlePrevEpisode();
+          }
+        }
+        return;
+      }
+      
+      if (!videoRef.current || !videoUrl) return;
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          seekForward();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          seekBackward();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setVolume((prev) => Math.min(1, prev + 0.1));
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          setVolume((prev) => Math.max(0, prev - 0.1));
+          break;
+        case 'KeyF':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'KeyM':
+          e.preventDefault();
+          toggleMute();
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [videoUrl, isPlaying, isMuted, volume, gdriveMode, currentEmbedUrl, activeEpisode, episodesList, handleActivity, handleBack, handleNextEpisode, handlePrevEpisode, togglePlay, seekForward, seekBackward, toggleFullscreen, toggleMute]);
+
+  useEffect(() => {
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Progress percentage
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   // Render Fallback if no video URL, gdrive ID, and no custom embed URL is provided
-  if (!videoUrl && !movie.gdriveId && !currentEmbedUrl) {
+  if (!videoUrl && !activeGdriveId && !currentEmbedUrl) {
     return (
       <div className="fixed inset-0 bg-[#09090B] flex flex-col justify-between p-6 md:p-12 text-white z-50 overflow-y-auto selection:bg-[#7C3AED]/30">
         
@@ -509,12 +538,14 @@ export default function WatchPage() {
   return (
     <div 
       ref={playerContainerRef}
-      onMouseMove={handleMouseMove}
+      onMouseMove={handleActivity}
+      onFocus={handleActivity}
+      onClick={handleActivity}
       className="fixed inset-0 w-full h-full bg-black z-50 select-none overflow-hidden flex flex-col justify-between"
       id={`astra-theater-player-${movie.id}`}
     >
       {/* Hidden tester element if checking Google Drive direct playability */}
-      {movie.gdriveId && gdriveMode === 'checking' && (
+      {activeGdriveId && gdriveMode === 'checking' && (
         <video 
           ref={videoRef}
           src={directStreamUrl}
@@ -549,7 +580,7 @@ export default function WatchPage() {
       )}
 
       {/* Mode 2: Google Drive Embed Frame */}
-      {movie.gdriveId && gdriveMode === 'embed' && (
+      {activeGdriveId && gdriveMode === 'embed' && (
         <div className="absolute inset-0 w-full h-full z-10 bg-black overflow-hidden">
           <iframe
             src={embedPreviewUrl}
@@ -559,7 +590,7 @@ export default function WatchPage() {
               height: 'calc(100% + 56px)',
             }}
             allow="autoplay; fullscreen; encrypted-media"
-            sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
+            sandbox="allow-scripts allow-same-origin allow-forms"
             id="gdrive-embed-iframe"
           />
         </div>
@@ -623,7 +654,7 @@ export default function WatchPage() {
           {/* Back Button */}
           <button
             onClick={handleBack}
-            className="flex items-center justify-center w-11 h-11 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-800 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg"
+            className="flex items-center justify-center w-11 h-11 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-800 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
             title="Voltar aos Detalhes"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -639,7 +670,7 @@ export default function WatchPage() {
                   Temporada {activeSeason} • Episódio {activeEpisode}
                 </span>
               )}
-              {movie.gdriveId && (
+              {activeGdriveId && (
                 <span className="text-[9px] bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-0.5 rounded font-black uppercase tracking-wider">
                   Cinema Cloud
                 </span>
@@ -652,9 +683,10 @@ export default function WatchPage() {
           </div>
         </div>
 
-        {/* Right Side: Active Stream Specs */}
-        <div className="flex flex-col items-end gap-1.5 font-mono text-[10px] md:text-xs text-zinc-400 text-right pointer-events-auto">
-          <div className="flex items-center gap-1.5 bg-zinc-950/60 border border-zinc-850 px-3 py-1.5 rounded-full backdrop-blur-md">
+        {/* Right Side: Active Stream Specs & Episode Navigation */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 pointer-events-auto">
+          {/* Active Stream Specs */}
+          <div className="hidden md:flex items-center gap-1.5 bg-zinc-950/60 border border-zinc-850 px-3 py-1.5 rounded-full backdrop-blur-md font-mono text-[10px] md:text-xs text-zinc-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[#A855F7] font-bold">4K ULTRA HD</span>
             <span>•</span>
@@ -662,6 +694,41 @@ export default function WatchPage() {
             <span>•</span>
             <span>Atmos 7.1</span>
           </div>
+
+          {/* Episode Navigation (Only for Series) */}
+          {movie.category === 'series' && episodesList.length > 0 && (
+            <div className="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 p-1 rounded-xl backdrop-blur-md shadow-2xl">
+              <button
+                onClick={handlePrevEpisode}
+                disabled={activeEpisode <= 1}
+                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all border cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110 ${
+                  activeEpisode <= 1
+                    ? 'border-zinc-900 text-zinc-700 bg-zinc-950/40 pointer-events-none'
+                    : 'border-zinc-850 text-zinc-300 bg-zinc-900 hover:bg-zinc-850 hover:text-white'
+                }`}
+                title="Episódio Anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <span className="text-[10px] font-mono font-black text-white px-2.5 py-1 bg-zinc-900/50 border border-zinc-850/50 rounded">
+                EP {activeEpisode} / {episodesList.length}
+              </span>
+
+              <button
+                onClick={handleNextEpisode}
+                disabled={activeEpisode >= episodesList.length}
+                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all border cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110 ${
+                  activeEpisode >= episodesList.length
+                    ? 'border-zinc-900 text-zinc-700 bg-zinc-950/40 pointer-events-none'
+                    : 'border-[#7C3AED]/40 text-purple-300 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 hover:text-white'
+                }`}
+                title="Próximo Episódio"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -687,7 +754,7 @@ export default function WatchPage() {
                 step="0.1"
                 value={progressPercent}
                 onChange={handleSeekChange}
-                className="w-full h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-[#7C3AED] group-hover/timeline:h-2 transition-all outline-none"
+                className="w-full h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-[#7C3AED] group-hover/timeline:h-2 transition-all outline-none focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED]"
               />
               <div 
                 className="absolute h-1.5 bg-gradient-to-r from-[#7C3AED] to-[#A855F7] rounded-full pointer-events-none" 
@@ -709,7 +776,7 @@ export default function WatchPage() {
               {/* Play / Pause button */}
               <button
                 onClick={togglePlay}
-                className="w-12 h-12 rounded-full bg-white text-black hover:bg-zinc-200 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer shadow-lg shadow-white/10"
+                className="w-12 h-12 rounded-full bg-white text-black hover:bg-zinc-200 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer shadow-lg shadow-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title={isPlaying ? "Pausar (Espaço)" : "Reproduzir (Espaço)"}
                 id="player-play-toggle"
               >
@@ -723,7 +790,7 @@ export default function WatchPage() {
               {/* Seek Back 10s */}
               <button
                 onClick={seekBackward}
-                className="w-10 h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
+                className="w-10 h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title="Voltar 10s (Seta Esquerda)"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -732,7 +799,7 @@ export default function WatchPage() {
               {/* Seek Forward 10s */}
               <button
                 onClick={seekForward}
-                className="w-10 h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
+                className="w-10 h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title="Avançar 10s (Seta Direita)"
               >
                 <RotateCw className="w-4 h-4" />
@@ -744,7 +811,7 @@ export default function WatchPage() {
               <div className="flex items-center gap-2 group/volume">
                 <button
                   onClick={toggleMute}
-                  className="w-10 h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                  className="w-10 h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                   title={isMuted ? "Ativar Áudio (M)" : "Silenciar (M)"}
                 >
                   {isMuted || volume === 0 ? (
@@ -761,15 +828,9 @@ export default function WatchPage() {
                   step="0.05"
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
-                  className="w-0 group-hover/volume:w-20 focus:w-20 h-1 rounded-full accent-[#7C3AED] transition-all duration-300 cursor-pointer opacity-0 group-hover/volume:opacity-100 bg-zinc-800 appearance-none"
+                  className="w-0 group-hover/volume:w-20 focus-visible:w-20 h-1 rounded-full accent-[#7C3AED] transition-all duration-300 cursor-pointer opacity-0 group-hover/volume:opacity-100 focus-visible:opacity-100 bg-zinc-800 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                 />
               </div>
-            </div>
-
-            {/* Center Block: Status text */}
-            <div className="hidden lg:flex items-center gap-1.5 text-xs text-zinc-500 uppercase tracking-widest font-black font-mono">
-              <Sparkles className="w-3.5 h-3.5 text-[#A855F7] animate-pulse" />
-              <span>Streaming Premium Astra</span>
             </div>
 
             {/* Right Block: Aspect ratio, Info & Fullscreen */}
@@ -778,7 +839,7 @@ export default function WatchPage() {
               <div className="relative">
                 <button
                   onClick={() => setIsSpeedDropdownOpen(!isSpeedDropdownOpen)}
-                  className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 >
                   <span>{playbackSpeed}x</span>
                   <ChevronDown className="w-3 h-3" />
@@ -789,7 +850,7 @@ export default function WatchPage() {
                       <button
                         key={opt}
                         onClick={() => handleSpeedSelect(opt)}
-                        className={`text-left text-[11px] font-bold p-2 rounded-lg flex items-center justify-between hover:bg-zinc-900 cursor-pointer ${
+                        className={`text-left text-[11px] font-bold p-2 rounded-lg flex items-center justify-between hover:bg-zinc-900 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] ${
                           playbackSpeed === opt ? 'text-[#A855F7]' : 'text-zinc-400'
                         }`}
                       >
@@ -804,7 +865,7 @@ export default function WatchPage() {
               {/* Fullscreen Button */}
               <button
                 onClick={toggleFullscreen}
-                className="w-10 h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                className="w-10 h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title="Tela Cheia (F)"
                 id="player-fullscreen-toggle"
               >
@@ -819,62 +880,7 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* Bottom Controls Panel overlay for Embed/Iframe Series */}
-      {movie.category === 'series' && currentEmbedUrl && (
-        <div 
-          className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-6 md:p-8 flex flex-col sm:flex-row items-center justify-between gap-4 z-30 transition-all duration-500 ${
-            showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
-          }`}
-          id="player-series-embed-controls"
-        >
-          {/* Left: Episode info */}
-          <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse" />
-            <span className="text-xs font-black uppercase text-zinc-300 tracking-wider">
-              Reproduzindo via Astra Premium Embed
-            </span>
-          </div>
 
-          {/* Center: Episode Navigator */}
-          <div className="flex items-center gap-4 pointer-events-auto">
-            <button
-              onClick={handlePrevEpisode}
-              disabled={activeEpisode <= 1}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border cursor-pointer ${
-                activeEpisode <= 1 
-                  ? 'border-zinc-800 text-zinc-600 bg-zinc-950/20 pointer-events-none' 
-                  : 'border-zinc-800 text-zinc-300 bg-zinc-900/60 hover:bg-zinc-800 hover:text-white hover:scale-103'
-              }`}
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Anterior</span>
-            </button>
-
-            <span className="text-xs font-mono font-black text-white px-4 py-2 bg-zinc-950/60 border border-zinc-850 rounded-xl">
-              EPISÓDIO {activeEpisode} / {episodesList.length}
-            </span>
-
-            <button
-              onClick={handleNextEpisode}
-              disabled={activeEpisode >= episodesList.length}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border cursor-pointer ${
-                activeEpisode >= episodesList.length
-                  ? 'border-zinc-800 text-zinc-600 bg-zinc-950/20 pointer-events-none' 
-                  : 'border-[#7C3AED]/40 text-purple-300 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 hover:text-white hover:scale-103'
-              }`}
-            >
-              <span>Próximo</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Right: Sound Tip */}
-          <div className="hidden lg:flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase tracking-widest font-black font-mono">
-            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-            <span>Use os controles internos do player para áudio/legenda</span>
-          </div>
-        </div>
-      )}
 
 
     </div>

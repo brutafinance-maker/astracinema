@@ -214,7 +214,6 @@ export default function DetailsPage() {
         { season_number: 1, name: 'Temporada 1', episode_count: 10 },
         { season_number: 2, name: 'Temporada 2', episode_count: 10 },
         { season_number: 3, name: 'Temporada 3', episode_count: 10 },
-        { season_number: 4, name: 'Temporada 4', episode_count: 10 },
       ];
     }
     if (currentMovie.seasons && currentMovie.seasons.length > 0) {
@@ -234,18 +233,14 @@ export default function DetailsPage() {
     
     const isFromSeries = currentMovie.title.toLowerCase().includes('from') || currentMovie.title.toLowerCase().includes('origem') || currentMovie.id.includes('124116');
     if (isFromSeries) {
-      return FROM_EPISODES.filter((ep) => ep.season === selectedSeason);
+      return FROM_EPISODES.filter((ep) => ep.season === selectedSeason).map((ep) => ({
+        ...ep,
+        thumbnailUrl: currentMovie.bannerUrl || ep.thumbnailUrl
+      }));
     }
     
     const activeSeasonObj = seasonsList.find((s) => s.season_number === selectedSeason) || seasonsList[0];
     const epCount = activeSeasonObj?.episode_count || 10;
-    
-    const placeholderThumbs = [
-      "https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&w=320&q=80",
-      "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=320&q=80",
-      "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=320&q=80",
-      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=320&q=80"
-    ];
     
     return Array.from({ length: epCount }, (_, idx) => ({
       season: selectedSeason,
@@ -254,7 +249,7 @@ export default function DetailsPage() {
       airDate: `2024`,
       rating: `${(8.0 + (idx % 15) / 10).toFixed(1)}/10`,
       description: `Descrição em alta definição do episódio ${idx + 1} da temporada ${selectedSeason} de ${currentMovie.title}. Mistérios, conflitos e revelações aguardam os sobreviventes neste capítulo instigante.`,
-      thumbnailUrl: placeholderThumbs[idx % placeholderThumbs.length]
+      thumbnailUrl: currentMovie.bannerUrl
     }));
   }, [currentMovie, selectedSeason, seasonsList]);
 
