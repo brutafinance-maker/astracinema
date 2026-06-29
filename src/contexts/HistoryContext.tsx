@@ -5,11 +5,13 @@ export interface WatchHistoryItem {
   movieId: string;
   progress: number; // percentage (0 to 100)
   watchedAt: string;
+  season?: number;
+  episode?: number;
 }
 
 interface HistoryContextType {
   history: WatchHistoryItem[];
-  addToHistory: (movieId: string, progress?: number) => void;
+  addToHistory: (movieId: string, progress?: number, season?: number, episode?: number) => void;
   clearHistory: () => void;
   getMovieProgress: (movieId: string) => number;
 }
@@ -43,15 +45,23 @@ export function HistoryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeProfile]);
 
-  const addToHistory = (movieId: string, progress: number = 0) => {
+  const addToHistory = (movieId: string, progress: number = 0, season?: number, episode?: number) => {
     setHistory((prev) => {
       // Remove any existing entry for this movie
       const filtered = prev.filter((item) => item.movieId !== movieId);
+      
+      // If we don't have new season/episode but had them previously, preserve them
+      const existing = prev.find((item) => item.movieId === movieId);
+      const finalSeason = season !== undefined ? season : existing?.season;
+      const finalEpisode = episode !== undefined ? episode : existing?.episode;
+
       const updated = [
         {
           movieId,
           progress: Math.min(100, Math.max(0, progress)),
           watchedAt: new Date().toISOString(),
+          season: finalSeason,
+          episode: finalEpisode,
         },
         ...filtered,
       ];

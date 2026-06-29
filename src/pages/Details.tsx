@@ -4,6 +4,7 @@ import { useRoute } from '../contexts/RouteContext';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { useUser } from '../contexts/UserContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useHistory } from '../contexts/HistoryContext';
 import { tmdbService } from '../services/tmdb';
 import { ContentItem } from '../types';
 import MovieCard from '../components/MovieCard';
@@ -16,12 +17,25 @@ export default function DetailsPage() {
   const { myListIds, toggleFavorite, isFavorite } = useFavorites();
   const { activeProfile } = useUser();
   const { currentUser } = useAuth();
+  const historyCtx = useHistory();
 
   const [detailedMovie, setDetailedMovie] = useState<ContentItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [isSeasonDropdownOpen, setIsSeasonDropdownOpen] = useState(false);
+
+  // Initialize selected season from watch history if available
+  useEffect(() => {
+    if (movie) {
+      const savedItem = historyCtx.history.find(h => h.movieId === movie.id);
+      if (savedItem?.season) {
+        setSelectedSeason(savedItem.season);
+      } else if (movie.selectedSeason) {
+        setSelectedSeason(movie.selectedSeason);
+      }
+    }
+  }, [movie?.id, historyCtx.history]);
 
   // Load complete rich details on mount
   useEffect(() => {
@@ -341,7 +355,25 @@ export default function DetailsPage() {
           {/* Core Banner Actions */}
           <div className="flex flex-wrap gap-3 pt-2">
             <button
-              onClick={() => handlePlayEpisode(1)}
+              onClick={() => {
+                if (currentMovie.category === 'series') {
+                  const savedItem = historyCtx.history.find(h => h.movieId === currentMovie.id);
+                  const targetSeason = savedItem?.season || 1;
+                  const targetEpisode = savedItem?.episode || 1;
+                  if (!currentUser) {
+                    navigateTo('login');
+                  } else {
+                    const playableMovie = { 
+                      ...currentMovie, 
+                      selectedSeason: targetSeason, 
+                      selectedEpisode: targetEpisode 
+                    };
+                    navigateTo('watch', playableMovie);
+                  }
+                } else {
+                  handlePlayEpisode(1);
+                }
+              }}
               className="flex items-center gap-2.5 bg-white hover:bg-zinc-200 text-black font-black px-8 py-3.5 rounded-md transition-all duration-300 hover:scale-[1.02] cursor-pointer shadow-xl shadow-black/30"
               id="details-banner-play"
             >

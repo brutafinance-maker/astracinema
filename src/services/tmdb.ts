@@ -174,6 +174,31 @@ export function mapTMDBItem(item: any, category: 'movie' | 'series', isRecursion
   const mappedId = isBackrooms ? 'backrooms' : `${category}-${item.id}`;
   const mappedTitle = isBackrooms ? 'Backrooms' : title;
 
+  let gdriveId: string | undefined = undefined;
+  if (isBackrooms) {
+    gdriveId = '1r5pCkp-onoHIje19Qb_573DN01vS34Dc';
+  } else if (category === 'movie') {
+    const tmdbId = Number(item.id);
+    const lowerTitle = title.toLowerCase();
+    
+    // Toy Story (1995)
+    if (tmdbId === 862 || (lowerTitle.includes('toy story') && !lowerTitle.includes('2') && !lowerTitle.includes('3') && !lowerTitle.includes('4'))) {
+      gdriveId = '1IaEDIfh-GP8o_v0TitfdChn1LRZDO2Wa';
+    }
+    // Toy Story 2 (1999)
+    else if (tmdbId === 863 || lowerTitle.includes('toy story 2') || (lowerTitle.includes('toy story') && lowerTitle.includes('2'))) {
+      gdriveId = '1fL9G0BnQvwalX7KiFSAMiVtsQEhKek-h';
+    }
+    // Toy Story 3 (2010)
+    else if (tmdbId === 10193 || lowerTitle.includes('toy story 3') || (lowerTitle.includes('toy story') && lowerTitle.includes('3'))) {
+      gdriveId = '1QIBchl3BWBRO7Ngft88vb2uh1Xhy7qnl';
+    }
+    // Toy Story 4 (2019)
+    else if (tmdbId === 301528 || lowerTitle.includes('toy story 4') || (lowerTitle.includes('toy story') && lowerTitle.includes('4'))) {
+      gdriveId = '1L4xEpviPQoeA4vIG4kFjrUXZps6wS-jn';
+    }
+  }
+
   return {
     id: mappedId,
     title: mappedTitle,
@@ -188,7 +213,7 @@ export function mapTMDBItem(item: any, category: 'movie' | 'series', isRecursion
     bannerUrl,
     trailerUrl: finalTrailerUrl,
     youtubeId: youtubeId || undefined,
-    gdriveId: isBackrooms ? '1r5pCkp-onoHIje19Qb_573DN01vS34Dc' : undefined,
+    gdriveId,
     hasRealTrailer,
     isPopular,
     isNew,

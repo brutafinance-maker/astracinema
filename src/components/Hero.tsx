@@ -5,6 +5,7 @@ import { ContentItem } from '../types';
 import { useRoute } from '../contexts/RouteContext';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useHistory } from '../contexts/HistoryContext';
 import { tmdbService } from '../services/tmdb';
 
 interface HeroProps {
@@ -23,6 +24,7 @@ export default function Hero({ movie }: HeroProps) {
   const { navigateTo, setPlayingMovie } = useRoute();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { currentUser } = useAuth();
+  const historyCtx = useHistory();
 
   const isInMyList = isFavorite(movie.id);
 
@@ -364,7 +366,13 @@ export default function Hero({ movie }: HeroProps) {
               if (!currentUser) {
                 navigateTo('login');
               } else {
-                navigateTo('watch', activeItem);
+                const savedItem = historyCtx.history.find(h => h.movieId === activeItem.id);
+                const playableItem = {
+                  ...activeItem,
+                  selectedSeason: savedItem?.season || 1,
+                  selectedEpisode: savedItem?.episode || 1,
+                };
+                navigateTo('watch', playableItem);
               }
             }}
             className="flex items-center justify-center gap-2 bg-[#7C3AED] text-white hover:bg-[#6D28D9] font-black text-sm px-8 py-3.5 rounded shadow-lg shadow-[#7C3AED]/20 hover:shadow-[#7C3AED]/40 hover:scale-102 active:scale-98 transition-all duration-200 cursor-pointer w-full sm:w-auto"

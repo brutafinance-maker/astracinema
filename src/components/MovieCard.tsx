@@ -28,17 +28,41 @@ export default function MovieCard({
   const historyCtx = useHistory();
   const { currentUser } = useAuth();
 
-  const handleCardClick = onCardClick || ((m) => routeCtx.navigateTo('details', m));
+  const handleCardClick = onCardClick || ((m) => {
+    // Find saved item in history to pre-select last watched episode/season on Details
+    const savedItem = historyCtx.history.find(h => h.movieId === m.id);
+    const mWithHistory = {
+      ...m,
+      selectedSeason: m.selectedSeason || savedItem?.season || 1,
+      selectedEpisode: m.selectedEpisode || savedItem?.episode || 1
+    };
+    routeCtx.navigateTo('details', mWithHistory);
+  });
+
   const handlePlayClick = onPlayClick || ((m) => {
+    // Find saved item in history
+    const savedItem = historyCtx.history.find(h => h.movieId === m.id);
+    const targetSeason = m.selectedSeason || savedItem?.season || 1;
+    const targetEpisode = m.selectedEpisode || savedItem?.episode || 1;
+    
+    const playable = {
+      ...m,
+      selectedSeason: targetSeason,
+      selectedEpisode: targetEpisode
+    };
+    
     // Add to watch history when user hits play
-    historyCtx.addToHistory(m.id, historyCtx.getMovieProgress(m.id) || 10);
-    routeCtx.navigateTo('watch', m);
+    historyCtx.addToHistory(m.id, historyCtx.getMovieProgress(m.id) || 10, targetSeason, targetEpisode);
+    routeCtx.navigateTo('watch', playable);
   });
   const handleToggleMyList = onToggleMyList || favoritesCtx.toggleFavorite;
   const isFavorited = isInMyList !== undefined ? isInMyList : favoritesCtx.isFavorite(movie.id);
 
-  // Look up actual user progress from HistoryContext or fallback to initial content item progress
+  // Look up actual user progress and history data from HistoryContext or fallback
   const userProgress = historyCtx.getMovieProgress(movie.id) || movie.continueWatchProgress;
+  const savedItem = historyCtx.history.find(h => h.movieId === movie.id);
+  const activeSeason = movie.selectedSeason || savedItem?.season;
+  const activeEpisode = movie.selectedEpisode || savedItem?.episode;
 
   return (
     <div 
@@ -74,6 +98,13 @@ export default function MovieCard({
         </div>
       </div>
 
+      {/* Floating Badge for Season/Episode if watching a series */}
+      {movie.category === 'series' && (activeSeason !== undefined || activeEpisode !== undefined) && (
+        <div className="absolute bottom-3 left-2 z-10 bg-gradient-to-r from-[#7C3AED] to-[#A855F7] px-1.5 py-0.5 rounded text-[9px] font-black text-white tracking-widest uppercase shadow-md shadow-black/40">
+          T{activeSeason || 1}:EP{activeEpisode || 1}
+        </div>
+      )}
+
       {/* Continuar Assistindo Progress Bar */}
       {userProgress !== undefined && userProgress > 0 && (
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800 z-10">
@@ -107,6 +138,12 @@ export default function MovieCard({
           <h3 className="text-white text-xs sm:text-sm font-black tracking-tight line-clamp-1 uppercase">
             {movie.title}
           </h3>
+          
+          {movie.category === 'series' && (activeSeason !== undefined || activeEpisode !== undefined) && (
+            <div className="text-[10px] font-black text-[#A855F7] uppercase tracking-wider">
+              Temporada {activeSeason || 1} • Ep. {activeEpisode || 1}
+            </div>
+          )}
           
           <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400">
             <span>{movie.year}</span>

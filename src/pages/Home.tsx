@@ -120,7 +120,9 @@ export default function HomePage() {
               const details = await tmdbService.getDetails(h.movieId);
               return {
                 ...details,
-                continueWatchProgress: h.progress
+                continueWatchProgress: h.progress,
+                selectedSeason: h.season,
+                selectedEpisode: h.episode
               };
             } catch (err) {
               console.warn(`Could not load history details for ${h.movieId}`, err);

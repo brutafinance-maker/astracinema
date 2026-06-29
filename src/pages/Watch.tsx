@@ -110,6 +110,19 @@ export default function WatchPage() {
     return () => clearTimeout(fallbackTimeout);
   }, [activeGdriveId, currentEmbedUrl]);
 
+  // Register the current series' active season and episode in watch history on change or load
+  useEffect(() => {
+    if (movie) {
+      const currentProgress = historyCtx.getMovieProgress(movie.id) || 0;
+      historyCtx.addToHistory(
+        movie.id,
+        currentProgress,
+        movie.category === 'series' ? activeSeason : undefined,
+        movie.category === 'series' ? activeEpisode : undefined
+      );
+    }
+  }, [movie?.id, activeSeason, activeEpisode]);
+
   // Setup seasons / episodes list
   useEffect(() => {
     if (movie.category === 'series') {
@@ -314,14 +327,24 @@ export default function WatchPage() {
       // Save progress dynamically in state and history context
       const percent = Math.floor((current / (videoRef.current.duration || 1)) * 100);
       if (percent % 5 === 0) {
-        historyCtx.addToHistory(movie.id, percent);
+        historyCtx.addToHistory(
+          movie.id,
+          percent,
+          movie.category === 'series' ? activeSeason : undefined,
+          movie.category === 'series' ? activeEpisode : undefined
+        );
       }
     }
   };
 
   const handleVideoEnded = () => {
     setIsPlaying(false);
-    historyCtx.addToHistory(movie.id, 100);
+    historyCtx.addToHistory(
+      movie.id,
+      100,
+      movie.category === 'series' ? activeSeason : undefined,
+      movie.category === 'series' ? activeEpisode : undefined
+    );
     if (movie.category === 'series') {
       handleNextEpisode();
     }
@@ -645,38 +668,38 @@ export default function WatchPage() {
 
       {/* Top Header Controls overlay (Shown for all modes to maintain a premium uniform look) */}
       <div 
-        className={`absolute top-0 inset-x-0 bg-gradient-to-b from-black/95 via-black/70 to-transparent p-6 md:p-8 flex items-start justify-between z-30 transition-all duration-500 pointer-events-none ${
-          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'
+        className={`absolute top-0 inset-x-0 bg-gradient-to-b from-black/95 via-black/70 to-transparent p-4 sm:p-6 md:p-8 flex items-start justify-between z-30 transition-all duration-500 ${
+          showControls ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-4 pointer-events-none'
         }`}
       >
         {/* Left Side: Info */}
-        <div className="flex items-start gap-4 pointer-events-auto">
+        <div className="flex items-start gap-2.5 sm:gap-4">
           {/* Back Button */}
           <button
             onClick={handleBack}
-            className="flex items-center justify-center w-11 h-11 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-800 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
+            className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-800 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
             title="Voltar aos Detalhes"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] bg-[#7C3AED] text-white font-black px-2 py-0.5 rounded uppercase tracking-wider">
+          <div className="space-y-0.5 sm:space-y-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[8px] sm:text-[9px] bg-[#7C3AED] text-white font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
                 {movie.category === 'movie' ? 'Filme' : 'Episódio'}
               </span>
               {movie.category === 'series' && (
-                <span className="text-[10px] text-[#A855F7] font-bold">
+                <span className="text-[9px] sm:text-[10px] text-[#A855F7] font-bold">
                   Temporada {activeSeason} • Episódio {activeEpisode}
                 </span>
               )}
               {activeGdriveId && (
-                <span className="text-[9px] bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                <span className="text-[8px] sm:text-[9px] bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">
                   Cinema Cloud
                 </span>
               )}
             </div>
-            <h1 className="text-lg md:text-xl font-black text-white leading-none tracking-tight uppercase">
+            <h1 className="text-sm sm:text-lg md:text-xl font-black text-white leading-tight tracking-tight uppercase">
               {movie.title}
               {movie.category === 'series' && ` — Ep. ${activeEpisode}`}
             </h1>
@@ -684,7 +707,7 @@ export default function WatchPage() {
         </div>
 
         {/* Right Side: Active Stream Specs & Episode Navigation */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 pointer-events-auto">
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-3">
           {/* Active Stream Specs */}
           <div className="hidden md:flex items-center gap-1.5 bg-zinc-950/60 border border-zinc-850 px-3 py-1.5 rounded-full backdrop-blur-md font-mono text-[10px] md:text-xs text-zinc-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -697,35 +720,35 @@ export default function WatchPage() {
 
           {/* Episode Navigation (Only for Series) */}
           {movie.category === 'series' && episodesList.length > 0 && (
-            <div className="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 p-1 rounded-xl backdrop-blur-md shadow-2xl">
+            <div className="flex items-center gap-1.5 bg-zinc-950/90 border border-zinc-800 p-1 rounded-lg sm:rounded-xl backdrop-blur-md shadow-2xl">
               <button
                 onClick={handlePrevEpisode}
                 disabled={activeEpisode <= 1}
-                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all border cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110 ${
+                className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-md sm:rounded-lg transition-all border cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110 ${
                   activeEpisode <= 1
                     ? 'border-zinc-900 text-zinc-700 bg-zinc-950/40 pointer-events-none'
                     : 'border-zinc-850 text-zinc-300 bg-zinc-900 hover:bg-zinc-850 hover:text-white'
                 }`}
                 title="Episódio Anterior"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
-              <span className="text-[10px] font-mono font-black text-white px-2.5 py-1 bg-zinc-900/50 border border-zinc-850/50 rounded">
+              <span className="text-[9px] sm:text-[10px] font-mono font-black text-white px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-zinc-900/50 border border-zinc-850/50 rounded">
                 EP {activeEpisode} / {episodesList.length}
               </span>
 
               <button
                 onClick={handleNextEpisode}
                 disabled={activeEpisode >= episodesList.length}
-                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all border cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110 ${
+                className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-md sm:rounded-lg transition-all border cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110 ${
                   activeEpisode >= episodesList.length
                     ? 'border-zinc-900 text-zinc-700 bg-zinc-950/40 pointer-events-none'
                     : 'border-[#7C3AED]/40 text-purple-300 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 hover:text-white'
                 }`}
                 title="Próximo Episódio"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
           )}
@@ -735,14 +758,14 @@ export default function WatchPage() {
       {/* Bottom Controls Panel overlay (Custom Controls rendered in direct Mode and not custom embed) */}
       {gdriveMode === 'direct' && !currentEmbedUrl && (
         <div 
-          className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-6 md:p-8 flex flex-col gap-4 z-30 transition-all duration-500 ${
+          className={`absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-4 sm:p-6 md:p-8 flex flex-col gap-3 sm:gap-4 z-30 transition-all duration-500 ${
             showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
           }`}
           id="player-bottom-controls"
         >
           {/* Timeline Progress Bar Row */}
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-mono text-zinc-400 w-12 text-left">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <span className="text-[10px] sm:text-xs font-mono text-zinc-400 w-10 sm:w-12 text-left">
               {formatTime(currentTime)}
             </span>
             
@@ -754,15 +777,15 @@ export default function WatchPage() {
                 step="0.1"
                 value={progressPercent}
                 onChange={handleSeekChange}
-                className="w-full h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-[#7C3AED] group-hover/timeline:h-2 transition-all outline-none focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED]"
+                className="w-full h-1 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-[#7C3AED] group-hover/timeline:h-1.5 transition-all outline-none focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED]"
               />
               <div 
-                className="absolute h-1.5 bg-gradient-to-r from-[#7C3AED] to-[#A855F7] rounded-full pointer-events-none" 
+                className="absolute h-1 bg-gradient-to-r from-[#7C3AED] to-[#A855F7] rounded-full pointer-events-none" 
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
 
-            <span className="text-xs font-mono text-zinc-400 w-12 text-right">
+            <span className="text-[10px] sm:text-xs font-mono text-zinc-400 w-10 sm:w-12 text-right">
               {formatTime(duration)}
             </span>
           </div>
@@ -771,53 +794,53 @@ export default function WatchPage() {
           <div className="flex items-center justify-between">
             
             {/* Left Block: Playback, Rewind, FastForward, Volume */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               
               {/* Play / Pause button */}
               <button
                 onClick={togglePlay}
-                className="w-12 h-12 rounded-full bg-white text-black hover:bg-zinc-200 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer shadow-lg shadow-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white text-black hover:bg-zinc-200 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer shadow-lg shadow-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title={isPlaying ? "Pausar (Espaço)" : "Reproduzir (Espaço)"}
                 id="player-play-toggle"
               >
                 {isPlaying ? (
-                  <Pause className="w-5 h-5 fill-current text-black" />
+                  <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current text-black" />
                 ) : (
-                  <Play className="w-5 h-5 fill-current text-black ml-0.5" />
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current text-black ml-0.5" />
                 )}
               </button>
 
               {/* Seek Back 10s */}
               <button
                 onClick={seekBackward}
-                className="w-10 h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title="Voltar 10s (Seta Esquerda)"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
               {/* Seek Forward 10s */}
               <button
                 onClick={seekForward}
-                className="w-10 h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-850 flex items-center justify-center active:scale-90 transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title="Avançar 10s (Seta Direita)"
               >
-                <RotateCw className="w-4 h-4" />
+                <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
-              <span className="h-6 w-[1px] bg-zinc-800 mx-1" />
+              <span className="h-5 w-[1px] bg-zinc-850 mx-0.5 sm:mx-1" />
 
               {/* Volume Control */}
-              <div className="flex items-center gap-2 group/volume">
+              <div className="flex items-center gap-1.5 sm:gap-2 group/volume">
                 <button
                   onClick={toggleMute}
-                  className="w-10 h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                   title={isMuted ? "Ativar Áudio (M)" : "Silenciar (M)"}
                 >
                   {isMuted || volume === 0 ? (
-                    <VolumeX className="w-4 h-4 text-zinc-500" />
+                    <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-500" />
                   ) : (
-                    <Volume2 className="w-4 h-4" />
+                    <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   )}
                 </button>
                 
@@ -828,34 +851,34 @@ export default function WatchPage() {
                   step="0.05"
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
-                  className="w-0 group-hover/volume:w-20 focus-visible:w-20 h-1 rounded-full accent-[#7C3AED] transition-all duration-300 cursor-pointer opacity-0 group-hover/volume:opacity-100 focus-visible:opacity-100 bg-zinc-800 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
+                  className="w-0 group-hover/volume:w-16 sm:group-hover/volume:w-20 focus-visible:w-16 sm:focus-visible:w-20 h-1 rounded-full accent-[#7C3AED] transition-all duration-300 cursor-pointer opacity-0 group-hover/volume:opacity-100 focus-visible:opacity-100 bg-zinc-800 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                 />
               </div>
             </div>
 
             {/* Right Block: Aspect ratio, Info & Fullscreen */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {/* Playback Speed Selector dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setIsSpeedDropdownOpen(!isSpeedDropdownOpen)}
-                  className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
+                  className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 >
                   <span>{playbackSpeed}x</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
                 {isSpeedDropdownOpen && (
-                  <div className="absolute bottom-14 right-0 w-24 bg-zinc-950 border border-zinc-850 rounded-xl p-1 shadow-xl z-50 flex flex-col gap-0.5">
+                  <div className="absolute bottom-12 sm:bottom-14 right-0 w-20 sm:w-24 bg-zinc-950 border border-zinc-850 rounded-lg sm:rounded-xl p-1 shadow-xl z-50 flex flex-col gap-0.5">
                     {speedOptions.map((opt) => (
                       <button
                         key={opt}
                         onClick={() => handleSpeedSelect(opt)}
-                        className={`text-left text-[11px] font-bold p-2 rounded-lg flex items-center justify-between hover:bg-zinc-900 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] ${
+                        className={`text-left text-[10px] sm:text-[11px] font-bold p-1.5 sm:p-2 rounded-md sm:rounded-lg flex items-center justify-between hover:bg-zinc-900 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] ${
                           playbackSpeed === opt ? 'text-[#A855F7]' : 'text-zinc-400'
                         }`}
                       >
                         <span>{opt}x</span>
-                        {playbackSpeed === opt && <Check className="w-3 h-3" />}
+                        {playbackSpeed === opt && <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
                       </button>
                     ))}
                   </div>
@@ -865,14 +888,14 @@ export default function WatchPage() {
               {/* Fullscreen Button */}
               <button
                 onClick={toggleFullscreen}
-                className="w-10 h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full hover:bg-zinc-900 text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#7C3AED] focus-visible:scale-110"
                 title="Tela Cheia (F)"
                 id="player-fullscreen-toggle"
               >
                 {isFullscreen ? (
-                  <Minimize className="w-4 h-4" />
+                  <Minimize className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 ) : (
-                  <Maximize className="w-4 h-4" />
+                  <Maximize className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 )}
               </button>
             </div>
